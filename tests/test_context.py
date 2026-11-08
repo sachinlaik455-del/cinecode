@@ -2473,6 +2473,25 @@ console.log(JSON.stringify({ ahead, farScale: far[2], nearScale: near[2], behind
             self.assertIn("window", run.stdout)
             self.assertNotIn("Traceback", run.stdout + run.stderr)
 
+    def test_a_window_keeps_its_sign_and_its_text_form(self):
+        p = self.root / "shots.json"
+        good = {"id": "S01", "start": 0, "end": 96, "description": "a cup", "action": "steam rises",
+                "action_from_frame_1": True, "reads": [{"read": "a cup", "t": [0, 2]}], "camera": "locked, 4 s"}
+
+        def run(film):
+            p.write_text(json.dumps(film), encoding="utf-8")
+            return subprocess.run([sys.executable, str(ROOT / "scripts" / "validate_shots.py"), str(p)],
+                                  capture_output=True, text=True)
+        base = {"title": "T", "fps": 24, "width": 1080, "height": 1920, "duration_frames": 96}
+        out = run(dict(base, shots=[dict(good, reads=[{"read": "a cup", "t": "-1-3"}])]))
+        self.assertIn("window -1-3 is invalid", out.stdout)                       # the sign is read, not dropped
+        out = run(dict(base, shots=[dict(good, text_on_screen=[{"text": "A CUP", "t": "0.4-3.0"}])]))
+        self.assertNotIn("on-screen text", out.stdout)                            # a text window still parses
+        out = run(dict(base, shots=[good], text_on_screen=[{"text": "A CUP", "t": ["0.4", "3.0"]}]))
+        self.assertNotIn("film text", out.stdout)                                 # the film's track reads them too
+        out = run(dict(base, shots=[dict(good, text_on_screen=[{"text": "A CUP", "t": ["a", "b"]}])]))
+        self.assertIn("window ['a', 'b']", out.stdout)                             # the error names what was written
+
     def test_a_final_reads_the_independent_viewer_and_waits_only_briefly(self):
         import argparse, time
         renders, review = self.root / "renders", self.root / "review"
