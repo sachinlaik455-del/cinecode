@@ -2457,6 +2457,22 @@ console.log(JSON.stringify({ ahead, farScale: far[2], nearScale: near[2], behind
         run = subprocess.run([sys.executable, str(ROOT / "scripts" / "validate_shots.py"), str(p)], capture_output=True, text=True)
         self.assertNotIn("FAILED", run.stdout + run.stderr)
 
+    def test_a_malformed_window_is_an_error_not_a_traceback(self):
+        p = self.root / "shots.json"
+        base = {"id": "S01", "start": 0, "end": 48, "description": "a cup", "action": "steam rises",
+                "camera": "locked, 2 s"}
+        films = [dict(base, reads=[{"read": "a cup", "t": t}]) for t in ([0.5], 2.5, ["a", "b"])]
+        films.append(dict(base, reads=[{"read": "a cup", "t": [0, 2]}],
+                          text_on_screen=[{"text": "A CUP", "t": ["a", "b"]}]))
+        for shot in films:
+            p.write_text(json.dumps({"title": "T", "fps": 24, "width": 1080, "height": 1920,
+                                     "duration_frames": 48, "shots": [shot]}), encoding="utf-8")
+            run = subprocess.run([sys.executable, str(ROOT / "scripts" / "validate_shots.py"), str(p)],
+                                 capture_output=True, text=True)
+            self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+            self.assertIn("window", run.stdout)
+            self.assertNotIn("Traceback", run.stdout + run.stderr)
+
     def test_a_final_reads_the_independent_viewer_and_waits_only_briefly(self):
         import argparse, time
         renders, review = self.root / "renders", self.root / "review"
